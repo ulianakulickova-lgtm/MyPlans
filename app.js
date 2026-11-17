@@ -32,7 +32,7 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 
 const progress = t => t.done ? 100 : (t.sub.length ? Math.round(t.sub.filter(x => x.done).length / t.sub.length * 100) : 0);
 
 const state = {
-  tab: 'tasks', filter: 'all', calFilter: 'all',
+  tab: 'tasks', open: new Set(), filter: 'all', calFilter: 'all',
   month: today().slice(0, 7), sel: today(), week: mondayOf(today()),
 };
 
@@ -68,6 +68,7 @@ function card(t) {
       ${t.due ? `<span style="${overdue ? 'color:#d6453d;font-weight:700' : ''}">${dueLabel(t.due)}</span>` : ''}
       <span class="tag" style="background:${c.c}">${c.n}</span>
     </div>
+    ${t.desc ? `<div class="desc ${state.open.has(t.id) ? 'open' : ''}" data-desc="${t.id}">${esc(t.desc)}</div>` : ''}
     ${(t.sub.length || t.done) ? `<div class="prog"><div class="bar"><i style="width:${p}%"></i></div>${p}%</div>` : ''}
     ${t.sub.length ? `<div class="subs">${t.sub.map((s, i) => `<div class="sub ${s.done ? 'on' : ''}" data-sub="${t.id}:${i}"><span class="chk ${s.done ? 'on' : ''}">✓</span><span>${esc(s.t)}</span></div>`).join('')}</div>` : ''}
   </div>`;
@@ -90,10 +91,11 @@ function viewTasks() {
   const done = list.filter(t => t.done);
   const cnt = k => tasks.filter(t => !t.done && (k === 'all' || t.cat === k)).length;
   const chip = (k, name, dot) => `<button class="chip ${f === k ? 'on' : ''}" data-filter="${k}">${dot ? `<span class="dot" style="background:${dot}"></span>` : ''}${name}<small>${cnt(k)}</small></button>`;
-  return `<h1>Что нужно <i>сделать</i></h1>
+  return `<div class="hero"><h1>Что нужно <i>сделать</i></h1>${dogSit()}</div>
   <div class="chips">${chip('all', 'Все')}${Object.entries(CATS).map(([k, c]) => chip(k, c.n, c.c)).join('')}</div>
   ${groups.map(([n, arr, cls]) => `<section class="group"><h3 class="${cls || ''}">${n}</h3>${arr.map(card).join('')}</section>`).join('')}
   ${!groups.length ? '<div class="empty">Пока пусто. Нажми «+ Задача».</div>' : ''}
+  <div class="sleeper">${dogSleep()}</div>
   ${done.length ? `<details class="group"><summary class="link">Готово · ${done.length}</summary><div style="margin-top:10px">${done.sort(byDue).map(card).join('')}</div></details>` : ''}`;
 }
 
@@ -117,7 +119,7 @@ function viewCal() {
   }
   const seg = (k, n) => `<button class="${f === k ? 'on' : ''}" data-calf="${k}">${n}</button>`;
   const dayTasks = tasks.filter(t => t.due === state.sel && (f === 'all' || t.cat === f));
-  return `<h1>Когда <i>горит</i></h1>
+  return `<div class="hero"><h1>Когда <i>горит</i></h1>${dogSit({ fur: '#d9a35f', fur2: '#a8702f', snout: '#f0cf9c', scarf: '#e58b97' })}</div>
   <div class="cal-top">
     <button class="arrow" data-m="-1">←</button><div class="ttl">${title}</div><button class="arrow" data-m="1">→</button>
     <div class="seg" style="margin-left:auto">${seg('work', 'Работа')}${seg('study', 'Учеба')}${seg('all', 'Всё вместе')}</div>
@@ -143,7 +145,7 @@ function viewLoad() {
   const busy = data.reduce((a, x) => x.total > a.total ? x : a, data[0]);
   const over = data.filter(x => x.total > 7);
   const label = `${fmt(days[0], { day: 'numeric', month: 'short' })} – ${fmt(days[6], { day: 'numeric', month: 'short' })}`;
-  return `<h1>Сколько <i>на мне</i></h1>
+  return `<div class="hero"><h1>Сколько <i>на мне</i></h1>${dogSit({ fur: '#a39a8e', fur2: '#6f675d', snout: '#cfc7bb', scarf: '#f0a64a' })}</div>
   <div class="cal-top"><button class="arrow" data-w="-7">←</button><div class="ttl">${label}</div><button class="arrow" data-w="7">→</button>
     <button class="pill ghost" data-w="0" style="margin-left:auto">Эта неделя</button></div>
   ${over.length ? `<div class="warn">⚠ Перегруз: ${over.map(x => `${fmt(x.d, { weekday: 'short' })} — ${x.total} ч`).join(', ')}. Подумай, что можно перенести.</div>` : ''}
@@ -162,18 +164,21 @@ function viewLoad() {
     <div><b>${total} ч</b><small>за неделю</small></div>
     <div><b>${data.reduce((a, x) => a + x.n, 0)}</b><small>задач с дедлайном</small></div>
     <div><b>${busy.total ? fmt(busy.d, { weekday: 'short' }) : '—'}</b><small>самый тяжёлый день</small></div>
-  </div>`;
+  </div>
+  <div class="sleeper">${dogSleep({ fur: '#a39a8e', fur2: '#6f675d', snout: '#cfc7bb' })}</div>`;
 }
 
 /* ---------- диалог ---------- */
 function openDlg(id, due) {
-  const t = id ? tasks.find(x => x.id === id) : { title: '', cat: 'work', due: due || today(), hours: '', star: false, repeat: 'none', sub: [] };
+  const t = id ? tasks.find(x => x.id === id) : { title: '', desc: '', cat: 'work', due: due || today(), hours: '', star: false, repeat: 'none', sub: [] };
   let cat = t.cat, star = t.star;
   const dlg = $('#dlg');
   const subRow = (v = '', done = false) => `<div class="subrow" data-done="${done}"><input class="inp" value="${esc(v)}" placeholder="Подзадача"><button type="button" data-rm>×</button></div>`;
   dlg.innerHTML = `<form method="dialog" id="f">
+    <div class="dog-mini">${dogSit({ fur: '#d9a35f', fur2: '#a8702f', snout: '#f0cf9c', scarf: '#78a974' })}</div>
     <h2>${id ? 'Изменить <i>задачу</i>' : 'Новая <i>задача</i>'}</h2>
     <label>Название</label><input class="inp" id="f-title" value="${esc(t.title)}" required autofocus>
+    <label>Описание</label><textarea class="inp" id="f-desc" placeholder="Подробности, ссылки, что именно нужно сделать">${esc(t.desc || '')}</textarea>
     <label>Тип</label>
     <div class="seg" id="f-cat">${Object.entries(CATS).map(([k, c]) => `<button type="button" data-c="${k}" class="${cat === k ? 'on' : ''}"><span class="dot" style="background:${c.c}"></span>${c.n}</button>`).join('')}</div>
     <div class="row">
@@ -203,7 +208,7 @@ function openDlg(id, due) {
   $('#f').onsubmit = () => {
     const sub = [...$('#f-subs').children].map(r => ({ t: r.querySelector('input').value.trim(), done: r.dataset.done === 'true' })).filter(s => s.t);
     const obj = {
-      id: id || uid(), title: $('#f-title').value.trim(), cat, due: $('#f-due').value, hours: +$('#f-hours').value || '',
+      id: id || uid(), title: $('#f-title').value.trim(), desc: $('#f-desc').value.trim(), cat, due: $('#f-due').value, hours: +$('#f-hours').value || '',
       star, repeat: $('#f-rep').value, sub, done: sub.length ? sub.every(s => s.done) : (t.done || false),
     };
     if (id) tasks[tasks.findIndex(x => x.id === id)] = obj; else tasks.push(obj);
@@ -224,6 +229,7 @@ document.addEventListener('click', e => {
   else if ((el = g('[data-add]'))) openDlg(null, el.dataset.add);
   else if ((el = g('[data-toggle]'))) toggleTask(el.dataset.toggle);
   else if ((el = g('[data-sub]'))) { const [id, i] = el.dataset.sub.split(':'); toggleSub(id, +i); }
+  else if ((el = g('[data-desc]'))) { const k = el.dataset.desc; state.open.has(k) ? state.open.delete(k) : state.open.add(k); render(); }
   else if ((el = g('[data-edit]'))) openDlg(el.dataset.edit);
   else if ((el = g('[data-filter]'))) { state.filter = el.dataset.filter; render(); }
   else if ((el = g('[data-calf]'))) { state.calFilter = el.dataset.calf; render(); }
@@ -232,3 +238,5 @@ document.addEventListener('click', e => {
   else if ((el = g('[data-w]'))) { const n = +el.dataset.w; state.week = n ? addDays(state.week, n) : mondayOf(today()); render(); }
 });
 render();
+pawsLayer();
+walkers();
